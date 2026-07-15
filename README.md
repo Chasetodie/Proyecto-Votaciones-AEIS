@@ -27,7 +27,7 @@ Este es un sistema de voto electrónico interactivo desarrollado en **C** para s
 
 ---
 
-## 🚀 Cómo probarlo
+## 🚀 ¿Cómo probarlo?
 
 Al usar librerías nativas de Windows (como `<conio.h>`), el proyecto está pensado para ejecutarse en este sistema operativo.
 
