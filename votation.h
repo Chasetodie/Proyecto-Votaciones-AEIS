@@ -1,21 +1,22 @@
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
+#include <stdlib.h>
 #include <unistd.h>
 #include <conio.h>
-#include <ctype.h>
 
 #define UP 72
 #define DOWN 80
 #define ENTER 13
 
 const char *usr[] = {"admin"};
-const char *pass[] = {"1234"};
+const char *pass[] = {"1234abcd"};
 
-void gotoxy(int x,int y)    
+void gotoxy(int x, int y)    
 {
     printf("%c[%d;%df",0x1B,y,x);
 }
+
 void crearImagen(int imagen)
 {
     switch (imagen) {
@@ -365,7 +366,7 @@ int crearMenu(const char* tituloMenu, const char *opcionesMenu[], int cantOpc, i
 int comprobarID(char idUser[100]) {  
     int anioEleccion, cantidadVotos, numeroCandidatos, estadoEleccion;
     char codigoEleccion[20];
-    FILE *archivoInfo = fopen("ElectionInfo.txt", "r");
+    FILE *archivoInfo = fopen("assets/data/ElectionInfo.txt", "r");
 
     if (archivoInfo == NULL) {
         crearBorde(2,1,118,25);
@@ -418,7 +419,7 @@ int comprobarID(char idUser[100]) {
 }
 
 int comprobarVotacionActiva() {
-    FILE *archivo = fopen("ElectionInfo.txt", "r");
+    FILE *archivo = fopen("assets/data/ElectionInfo.txt", "r");
     char linea[50];
     int flag = -1;
 
@@ -437,7 +438,7 @@ int comprobarVotacionActiva() {
 }
 
 int contarCandidatos() {
-    FILE *archivo = fopen("ElectionInfo.txt", "r");
+    FILE *archivo = fopen("assets/data/ElectionInfo.txt", "r");
     char linea[50];
     int candidatos = 0;
 
@@ -455,6 +456,27 @@ int contarCandidatos() {
     return candidatos;
 }
 
+// Borra los archivos de la votacion anterior antes de crear una nueva
+void borrarArchivosVotacionAnterior() {
+    FILE *archivoInfo = fopen("assets/data/ElectionInfo.txt", "r");
+
+    if (archivoInfo != NULL) {
+        int numeroCandidatosAnterior = contarCandidatos();
+
+        // Borra el archivo de cada candidato de la votacion anterior
+        for (int i = 1; i <= numeroCandidatosAnterior; i++) {
+            char nombreArchivo[100];
+            sprintf(nombreArchivo, "assets/data/Candidato%d.txt", i);
+            remove(nombreArchivo);
+        }
+    }
+
+    // Borra tambien la lista de baneados, el reporte anterior y la info de la eleccion vieja
+    remove("assets/data/Baneados.txt");
+    remove("assets/data/Resultados.csv");
+    remove("assets/data/ElectionInfo.txt");
+}
+
 void crearVotacion() {
     if (comprobarVotacionActiva() == 1) {
         crearBorde(2, 1, 118, 25);
@@ -463,6 +485,8 @@ void crearVotacion() {
         sleep(3);
         return;
     }
+
+    borrarArchivosVotacionAnterior();
 
     int anio, cantidadVotos, numeroCandidatos, i = 0, j = 0;
     char codigo[20], nombreCandidato[100], nombreArchivo[100];
@@ -501,7 +525,7 @@ void crearVotacion() {
         printf("INGRESE EL NOMBRE DEL CANDIDATO N%c%d: ", 167, j);
         scanf("%s", nombreCandidato);
                    
-        sprintf(nombreArchivo, "Candidato%d.txt", i);
+        sprintf(nombreArchivo, "assets/data/Candidato%d.txt", i);
         archivo = fopen(nombreArchivo, "w");
                     
         if (archivo == NULL) {
@@ -517,7 +541,7 @@ void crearVotacion() {
 
     } while(i > 0);
 
-    archivo = fopen("ElectionInfo.txt", "w");
+    archivo = fopen("assets/data/ElectionInfo.txt", "w");
 
     if (archivo == NULL) {
         printf("Error al crear el archivo.\n");
@@ -549,7 +573,7 @@ void crearVotacion() {
 }
 
 int cambiarEstadoVotacion(int nuevoEstado) {
-    FILE *archivoNuevo = fopen("ElectionInfo.txt", "r+");
+    FILE *archivoNuevo = fopen("assets/data/ElectionInfo.txt", "r+");
     char linea[50];
 
     if (archivoNuevo == NULL) {
@@ -570,7 +594,7 @@ int cambiarEstadoVotacion(int nuevoEstado) {
 }
 
 int contarVotosCreados() {
-    FILE *archivo = fopen("ElectionInfo.txt", "r");
+    FILE *archivo = fopen("assets/data/ElectionInfo.txt", "r");
     char linea[50];
     int cantVotos = 0;
 
@@ -593,7 +617,7 @@ int sumarVotosRecursivo(int candidatoActual, int numeroCandidatos) {
     }
 
     char nombreArchivo[100];
-    sprintf(nombreArchivo, "Candidato%d.txt", candidatoActual);
+    sprintf(nombreArchivo, "assets/data/Candidato%d.txt", candidatoActual);
     FILE *archivo = fopen(nombreArchivo, "r");
 
     int votos = 0;
@@ -605,6 +629,30 @@ int sumarVotosRecursivo(int candidatoActual, int numeroCandidatos) {
     return votos + sumarVotosRecursivo(candidatoActual + 1, numeroCandidatos);
 }
 
+// Ordena los candidatos de mas a menos votados (ordenamiento por seleccion)
+void ordenarCandidatos(char nombres[][100], int votos[], int cantidad) {
+    for (int i = 0; i < cantidad - 1; i++) {
+        int indiceMayor = i;
+
+        for (int j = i + 1; j < cantidad; j++) {
+            if (votos[j] > votos[indiceMayor]) {
+                indiceMayor = j;
+            }
+        }
+
+        if (indiceMayor != i) {
+            int votosTemp = votos[i];
+            votos[i] = votos[indiceMayor];
+            votos[indiceMayor] = votosTemp;
+
+            char nombreTemp[100];
+            strcpy(nombreTemp, nombres[i]);
+            strcpy(nombres[i], nombres[indiceMayor]);
+            strcpy(nombres[indiceMayor], nombreTemp);
+        }
+    }
+}
+
 void mostrarResultados() {
     crearBorde(2,1,118,25);
 
@@ -613,9 +661,9 @@ void mostrarResultados() {
     sleep(2);
     system("cls");
   
-    FILE *archivo = fopen("ElectionInfo.txt", "r");
+    FILE *archivo = fopen("assets/data/ElectionInfo.txt", "r");
     char linea[50];
-    int numeroCandidatos, votosGanador = 0, votosTotales = 0, numVotos = contarVotosCreados(), i = 1;
+    int numeroCandidatos = contarCandidatos(), votosGanador = 0, votosTotales = 0, numVotos = contarVotosCreados(), i = 1;
     float porcentajeVotos = 0;
 
     char nombresGanadores[50][100];
@@ -629,24 +677,22 @@ void mostrarResultados() {
         return;
     }
 
-    for (int i = 0; i < 3; i++) {
-        fgets(linea, sizeof(linea), archivo);
-    }
-
-    fscanf(archivo, "%d", &numeroCandidatos);
     fclose(archivo);
 
     crearBorde(2,1,118,25);
     gotoxy (45,3);	
     printf("RESULTADOS DE LA VOTACION!");                 
 
+    char nombresCandidatos[500][100];
+    int votosCandidatos[500];
+    int cantidadCargados = 0;
+
     for (i = 1; i <= numeroCandidatos; i++) {
         char nombreArchivo[100];
-        sprintf(nombreArchivo, "Candidato%d.txt", i);
+        sprintf(nombreArchivo, "assets/data/Candidato%d.txt", i);
         archivo = fopen(nombreArchivo, "r");
 
         if (archivo == NULL) {
-//            printf("Error al abrir el archivo del candidato %d.\n", i);
             continue;
         }
 
@@ -658,19 +704,27 @@ void mostrarResultados() {
         fscanf(archivo, "%s", nombreCandidato); // Leer el nombre del candidato hasta el salto de línea
         fclose(archivo);
 
-        gotoxy(8, 3 + (i * 2));
-        printf("Candidato %d: %s - Votos: %d", i, nombreCandidato, votos);
+        votosCandidatos[cantidadCargados] = votos;
+        strcpy(nombresCandidatos[cantidadCargados], nombreCandidato);
+        cantidadCargados++;
+    }
 
-        if (votosGanador < votos) {
-            votosGanador = votos;
-            cantidadGanadores = 0;
-            strcpy(nombresGanadores[cantidadGanadores], nombreCandidato);
-            cantidadGanadores++;
-        } else if (votos == votosGanador && votos > 0) {
-            strcpy(nombresGanadores[cantidadGanadores], nombreCandidato);
-            cantidadGanadores++;
+    ordenarCandidatos(nombresCandidatos, votosCandidatos, cantidadCargados);
+
+    if (cantidadCargados > 0) {
+        votosGanador = votosCandidatos[0];
+        for (int k = 0; k < cantidadCargados && votosCandidatos[k] == votosGanador; k++) {
+            strcpy(nombresGanadores[cantidadGanadores], nombresCandidatos[k]);
+            cantidadGanadores++;     
         }
     }
+
+    for (int k = 0; k < cantidadCargados; k++) {
+        gotoxy(8, 3 + ((k + 1) * 2));
+        printf("Puesto N%c%d: %s - Votos: %d", 167, k + 1, nombresCandidatos[k], votosCandidatos[k]);
+    }
+
+    i = cantidadGanadores;
 
     votosTotales = sumarVotosRecursivo(1, numeroCandidatos);
 
@@ -691,39 +745,62 @@ void mostrarResultados() {
 
     porcentajeVotos = ((float)votosTotales / numVotos) * 100;
 
+    FILE *reporteCSV = fopen("assets/data/Resultados.csv", "w");
+
+    if (reporteCSV != NULL) {
+        fprintf(reporteCSV, "REPORTE DE RESULTADOS DE LA VOTACION\n");
+        fprintf(reporteCSV, "\n");
+
+        fprintf(reporteCSV, "Posicion;Candidato;Votos\n");
+
+        for (int k = 0; k < cantidadCargados; k++) {
+            fprintf(reporteCSV, "%d;%s;%d\n", k + 1, nombresCandidatos[k], votosCandidatos[k]);
+        }
+
+        fprintf(reporteCSV, "\n");
+
+        if (cantidadGanadores == 1) {
+            fprintf(reporteCSV, "GANADOR;%s;%d votos\n", nombresCandidatos[0], votosCandidatos[0]);
+        } else {
+            fprintf(reporteCSV, "EMPATE ENTRE %d CANDIDATOS;%d votos cada uno\n", cantidadGanadores, votosCandidatos[0]);
+        }
+
+        fclose(reporteCSV);
+    }
+
     if (cantidadGanadores == 1) {
-        gotoxy(40, (i * 2) + cantidadGanadores + 2);
+        gotoxy(40, (numeroCandidatos * 2) + cantidadGanadores + 4);
         printf("EL GANADOR ES: %s CON %d VOTOS!!.", nombresGanadores[0], votosGanador);
 
-        gotoxy(8, (i * 2) + cantidadGanadores + 4);
+        gotoxy(8, (numeroCandidatos * 2) + cantidadGanadores + 6);
         printf("Porcentaje de votos emitidos: %.2f%%", porcentajeVotos);
 
         if (comprobarVotacionActiva() == 1) {
             cambiarEstadoVotacion(0); // Cambiar el estado de la votación a inactiva
-            gotoxy(8, (i * 2) + cantidadGanadores + 6);
+            gotoxy(8, (numeroCandidatos * 2) + cantidadGanadores + 8);
             printf("Aviso: La votacion ha sido cerrada.");
         } else {
-            gotoxy(8, (i * 2) + cantidadGanadores + 6);
+            gotoxy(8, (numeroCandidatos * 2) + cantidadGanadores + 8);
             printf("Aviso: La votacion ya ha sido cerrada. Puede reactivarla en cualquier momento, o crear una nueva.");
         }
-        gotoxy(8, (i * 2) + cantidadGanadores + 8);
+        gotoxy(8, (numeroCandidatos * 2) + cantidadGanadores + 10);
         system("pause");
-    } else {
-        gotoxy(30, (i * 2) + 3);
+    } else {       
+        gotoxy(30, (numeroCandidatos * 2) + 5);
         printf("HAY UN EMPATE ENTRE %d CANDIDATOS CON %d VOTOS CADA UNO", cantidadGanadores, votosGanador);
 
-        gotoxy(8, (i * 2) + 5);
+        gotoxy(8, (numeroCandidatos * 2) + 7);
         printf("Porcentaje de votos emitidos: %.2f%%", porcentajeVotos);
 
         if (comprobarVotacionActiva() == 1) {
             cambiarEstadoVotacion(0); // Cambiar el estado de la votación a inactiva
-            gotoxy(8, (i * 2) + 7);
+            gotoxy(8, (numeroCandidatos * 2) + 9);
             printf("Aviso: La votacion ha sido cerrada.");
         } else {
-            gotoxy(8, (i * 2) + 7);
+            gotoxy(8, (numeroCandidatos * 2) + 9);
             printf("Aviso: La votacion ya ha sido cerrada. Puede reactivarla en cualquier momento, o crear una nueva.");
         }
-        gotoxy(8, (i * 2) + 9);
+        gotoxy(8, (numeroCandidatos * 2) + 11);
         system("pause");
     }
 }
@@ -736,7 +813,7 @@ void verificarEstadoVotacion() {
     sleep(2);
     system("cls");
   
-    FILE *archivo = fopen("ElectionInfo.txt", "r");
+    FILE *archivo = fopen("assets/data/ElectionInfo.txt", "r");
     char linea[50];
     int numeroCandidatos = 0, votosTotales = 0, numVotos = contarVotosCreados();
 
@@ -794,8 +871,8 @@ int quitarVotoDeId(char *idBuscada, int numeroCandidatos) {
         char idsGuardadas[500][100];
         int votos, cantidadIds = 0;
 
-        sprintf(nombreArchivo, "Candidato%d.txt", i);
-        sprintf(nombreTemporal, "Candidato%dTemp.txt", i);
+        sprintf(nombreArchivo, "assets/data/Candidato%d.txt", i);
+        sprintf(nombreTemporal, "assets/data/Candidato%dTemp.txt", i);
 
         FILE *original = fopen(nombreArchivo, "r");
 
@@ -862,7 +939,7 @@ void borrarVoto() {
     char linea[50];
     int encontrado = 0;
 
-    FILE *archivoInfo = fopen("ElectionInfo.txt", "r");
+    FILE *archivoInfo = fopen("assets/data/ElectionInfo.txt", "r");
 
     if (archivoInfo == NULL) {
         crearBorde(2,1,118,25);
@@ -909,8 +986,8 @@ void borrarVoto() {
         char idsGuardadas[500][100];
         int votos, cantidadIds = 0;
 
-        sprintf(nombreArchivo, "Candidato%d.txt", i);
-        sprintf(nombreTemporal, "Candidato%dTemp.txt", i);
+        sprintf(nombreArchivo, "assets/data/Candidato%d.txt", i);
+        sprintf(nombreTemporal, "assets/data/Candidato%dTemp.txt", i);
 
         FILE *original = fopen(nombreArchivo, "r");
 
@@ -979,7 +1056,7 @@ void borrarVoto() {
 }
 
 int verificarBaneo(char *idBuscada) {
-    FILE *archivo = fopen("Baneados.txt", "r");
+    FILE *archivo = fopen("assets/data/Baneados.txt", "r");
     char idGuardada[100];
 
     if (archivo == NULL) {
@@ -1007,7 +1084,7 @@ void banearUsuario() {
     }
 
     char idBanear[100];
-    FILE *archivoInfo = fopen("ElectionInfo.txt", "r");
+    FILE *archivoInfo = fopen("assets/data/ElectionInfo.txt", "r");
 
     if (archivoInfo == NULL) {
         crearBorde(2,1,118,25);
@@ -1061,7 +1138,7 @@ void banearUsuario() {
         return;
     }
 
-    FILE *archivoBaneados = fopen("Baneados.txt", "a");
+    FILE *archivoBaneados = fopen("assets/data/Baneados.txt", "a");
     fprintf(archivoBaneados, "%s\n", idBanear);
     fclose(archivoBaneados);
 
@@ -1213,8 +1290,8 @@ void registrarVoto(int numeroCandidato, char *idVotante) {
     char nombreCandidato[100];
     char idGuardada[100];
 
-    sprintf(nombreArchivo, "Candidato%d.txt", numeroCandidato);
-    sprintf(nombreTemporal, "Candidato%dTemp.txt", numeroCandidato);
+    sprintf(nombreArchivo, "assets/data/Candidato%d.txt", numeroCandidato);
+    sprintf(nombreTemporal, "assets/data/Candidato%dTemp.txt", numeroCandidato);
 
     FILE *original = fopen(nombreArchivo, "r");
     FILE *temporal = fopen(nombreTemporal, "w");
@@ -1265,7 +1342,7 @@ int verificarVoto(char *idBuscada, int numeroCandidatos) {
         char idGuardada[100];
         int votos;
 
-        sprintf(nombreArchivo, "Candidato%d.txt", i);
+        sprintf(nombreArchivo, "assets/data/Candidato%d.txt", i);
         FILE *archivo = fopen(nombreArchivo, "r");
 
         if (archivo == NULL) {
@@ -1292,7 +1369,7 @@ void studentMenu() {
     char idUser[100];
     int numeroCandidatos = contarCandidatos(), estadoEleccion = comprobarVotacionActiva();
 
-    FILE *archivoInfo = fopen("ElectionInfo.txt", "r");
+    FILE *archivoInfo = fopen("assets/data/ElectionInfo.txt", "r");
 
     if (archivoInfo == NULL) {
         crearBorde(2, 1, 118, 25);
@@ -1373,7 +1450,7 @@ void studentMenu() {
 
     for (int i = 0; i < numeroCandidatos; i++) {
         char nombreArchivo[100];
-        sprintf(nombreArchivo, "Candidato%d.txt", i + 1);
+        sprintf(nombreArchivo, "assets/data/Candidato%d.txt", i + 1);
         FILE *archivo = fopen(nombreArchivo, "r");
 
         if (archivo == NULL) {
